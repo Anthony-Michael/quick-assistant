@@ -1,0 +1,78 @@
+{
+    "printer": {
+      "title": "Printer Troubleshooting",
+      "category": "hardware",
+      "description": "Basic troubleshooting steps for printer issues before contacting IT.",
+      "steps": [
+        {
+          "id": "power_check",
+          "title": "Check Power",
+          "instructions": [
+            "Make sure the printer is turned on.",
+            "Check power cable is securely connected.",
+            "Look for warning lights or error messages."
+          ]
+        },
+        {
+          "id": "paper_check",
+          "title": "Paper & Physical Check",
+          "instructions": [
+            "Confirm paper is loaded correctly.",
+            "Check for paper jams or debris.",
+            "Ensure ink/toner levels are sufficient."
+          ]
+        },
+        {
+          "id": "queue_check",
+          "title": "Check Print Queue",
+          "instructions": [
+            "Open printer queue on computer.",
+            "Cancel any stuck print jobs.",
+            "Try printing a test page."
+          ]
+        },
+        {
+          "id": "restart_devices",
+          "title": "Restart Devices",
+          "instructions": [
+            "Turn printer off.",
+            "Wait 10–15 seconds.",
+            "Turn printer back on.",
+            "Restart the computer if needed."
+          ]
+        },
+        {
+          "id": "network_check",
+          "title": "Network Check",
+          "instructions": [
+            "Ensure printer is connected to correct network.",
+            "Check computer is on same network.",
+            "Ask if others can print."
+          ]
+        },
+        {
+          "id": "software_check",
+          "title": "Software Check",
+          "instructions": [
+            "Ensure correct printer is selected.",
+            "Confirm printer is not offline or paused.",
+            "Try printing from another application."
+          ]
+        }
+      ],
+      "do_not_attempt": [
+        "Reinstall printer drivers",
+        "Modify network settings",
+        "Install firmware updates",
+        "Run admin-level commands"
+      ],
+      "escalation_info": [
+        "Printer name/location",
+        "Exact error message",
+        "What troubleshooting steps were completed",
+        "Device used (POS, laptop, desktop)",
+        "When the issue started",
+        "Whether others are affected"
+      ]
+    }
+  }
