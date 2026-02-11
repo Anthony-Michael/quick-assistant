@@ -66,14 +66,18 @@ export default function IssueFlow({ issue, slug }: Props) {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed, slug }),
+        body: JSON.stringify({
+          slug,
+          question: trimmed,
+          currentStepIndex,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setAssistantError((data as { error?: string }).error || "Something went wrong.");
         return;
       }
-      setAssistantResponse((data as { content?: string }).content ?? "No response.");
+      setAssistantResponse((data as { answer?: string }).answer ?? "No response.");
       setAssistantInput("");
     } catch {
       setAssistantError("Network error. Please try again.");
@@ -175,9 +179,9 @@ export default function IssueFlow({ issue, slug }: Props) {
       </div>
 
       <div className="mt-6 rounded-lg border border-zinc-200 bg-zinc-50/50 p-4">
-        <label className="mb-2 block text-sm font-medium text-zinc-700">
+        <h2 className="mb-2 text-sm font-semibold text-zinc-800">
           Ask the assistant
-        </label>
+        </h2>
         <textarea
           value={assistantInput}
           onChange={(e) => setAssistantInput(e.target.value)}

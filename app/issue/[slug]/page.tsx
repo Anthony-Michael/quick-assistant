@@ -3,11 +3,11 @@ import IssueFlow from "./IssueFlow";
 import type { IssueData } from "./IssueFlow";
 
 type Props = {
-  params: Promise<{ slug: string }>;
+  params: { slug: string };
 };
 
-export default async function IssuePage({ params }: Props) {
-  const { slug } = await params;
+export default function IssuePage({ params }: Props) {
+  const { slug } = params;
   const issue = (issues as Record<string, IssueData>)[slug];
 
   if (!issue) {
