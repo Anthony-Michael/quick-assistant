@@ -1,4 +1,6 @@
-import Link from "next/link";
+import issues from "@/app/kb/issues.json";
+import IssueFlow from "./IssueFlow";
+import type { IssueData } from "./IssueFlow";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -6,20 +8,15 @@ type Props = {
 
 export default async function IssuePage({ params }: Props) {
   const { slug } = await params;
+  const issue = (issues as Record<string, IssueData>)[slug];
 
-  return (
-    <div className="min-h-screen bg-zinc-50 p-8">
-      <div className="mx-auto max-w-2xl">
-        <Link
-          href="/"
-          className="mb-6 inline-block text-sm text-zinc-600 hover:text-zinc-900"
-        >
-          ← Back to issues
-        </Link>
-        <h1 className="text-3xl font-semibold text-zinc-900 capitalize">
-          {slug.replace(/-/g, " ")}
-        </h1>
+  if (!issue) {
+    return (
+      <div className="mx-auto max-w-3xl p-6">
+        <p className="text-zinc-600">Unknown issue.</p>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return <IssueFlow issue={issue} slug={slug} />;
 }
