@@ -15,6 +15,12 @@ export type IssueData = {
   escalation_info?: string[];
 };
 
+export type AssistantResponse = {
+  answer: string;
+  recommendation: "next_step" | "repeat_step" | "escalate";
+  shouldEscalate: boolean;
+};
+
 type Props = {
   issue: IssueData;
   slug: string;
@@ -29,7 +35,11 @@ export default function IssueFlow({ issue, slug }: Props) {
   const [assistantInput, setAssistantInput] = useState("");
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [assistantError, setAssistantError] = useState<string | null>(null);
-  const [assistantResponse, setAssistantResponse] = useState<string | null>(null);
+  const [assistantResponse, setAssistantResponse] =
+    useState<AssistantResponse | null>(null);
+
+  const [attemptedStepIds, setAttemptedStepIds] = useState<string[]>([]);
+  const [attemptedStepTitles, setAttemptedStepTitles] = useState<string[]>([]);
 
   const steps = issue.steps;
   const totalSteps = steps.length;
@@ -37,7 +47,18 @@ export default function IssueFlow({ issue, slug }: Props) {
   const isLastStep = currentStepIndex === totalSteps - 1;
   const escalationInfo = issue.escalation_info ?? [];
 
+  const markCurrentStepAttempted = () => {
+    const step = currentStep;
+    setAttemptedStepIds((prev) => (prev.includes(step.id) ? prev : [...prev, step.id]));
+    setAttemptedStepTitles((prev) => (prev.includes(step.title) ? prev : [...prev, step.title]));
+  };
+
   const handleNextStep = () => {
+    markCurrentStepAttempted();
+
+    setAssistantResponse(null);
+    setAssistantError(null);
+
     if (isLastStep) {
       setShowEscalation(true);
     } else {
@@ -60,7 +81,6 @@ export default function IssueFlow({ issue, slug }: Props) {
     const trimmed = assistantInput.trim();
     if (!trimmed || assistantLoading) return;
     setAssistantError(null);
-    setAssistantResponse(null);
     setAssistantLoading(true);
     try {
       const res = await fetch("/api/chat", {
@@ -70,14 +90,26 @@ export default function IssueFlow({ issue, slug }: Props) {
           slug,
           question: trimmed,
           currentStepIndex,
+          currentStepTitle: currentStep.title,
+          attemptedStepIds,
+          attemptedStepTitles,
         }),
       });
-      const data = await res.json().catch(() => ({}));
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {}
       if (!res.ok) {
         setAssistantError((data as { error?: string }).error || "Something went wrong.");
         return;
       }
-      setAssistantResponse((data as { answer?: string }).answer ?? "No response.");
+      setAssistantResponse({
+        answer: (data as { answer?: string }).answer ?? "No response.",
+        recommendation:
+          (data as { recommendation?: "next_step" | "repeat_step" | "escalate" })
+            .recommendation ?? "repeat_step",
+        shouldEscalate: Boolean((data as { shouldEscalate?: boolean }).shouldEscalate),
+      });
       setAssistantInput("");
     } catch {
       setAssistantError("Network error. Please try again.");
@@ -163,7 +195,10 @@ export default function IssueFlow({ issue, slug }: Props) {
         <div className="flex flex-wrap gap-3">
           <button
             type="button"
-            onClick={() => setResolved(true)}
+            onClick={() => {
+              markCurrentStepAttempted();
+              setResolved(true);
+            }}
             className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
           >
             Fixed
@@ -210,9 +245,29 @@ export default function IssueFlow({ issue, slug }: Props) {
           </p>
         )}
         {assistantResponse && (
-          <div className="mt-3 rounded border border-zinc-200 bg-white p-3 text-sm text-zinc-700 whitespace-pre-wrap">
-            {assistantResponse}
-          </div>
+          <>
+            <div className="mt-3 rounded border border-zinc-200 bg-white p-3 text-sm text-zinc-700 whitespace-pre-wrap">
+              {assistantResponse.answer}
+            </div>
+            {assistantResponse.shouldEscalate && (
+              <button
+                type="button"
+                onClick={() => setShowEscalation(true)}
+                className="mt-2 rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Escalate to IT
+              </button>
+            )}
+            {assistantResponse.recommendation === "next_step" && (
+              <button
+                type="button"
+                onClick={handleNextStep}
+                className="mt-2 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              >
+                Go to next step
+              </button>
+            )}
+          </>
         )}
       </div>
 
