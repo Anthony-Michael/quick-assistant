@@ -11,6 +11,13 @@ type IssueData = {
   escalation_info?: string[];
 };
 
+// Local type for the model response
+type ModelJson = {
+  answer?: string;
+  recommendation?: "next_step" | "repeat_step" | "escalate";
+  shouldEscalate?: boolean;
+};
+
 function buildSystemPrompt(
   issue: IssueData,
   options?: {
@@ -38,7 +45,7 @@ function buildSystemPrompt(
     attemptedTitles.length > 0
       ? `The user has already attempted these steps: ${attemptedTitles.join(
           ", "
-        )}. Do not repeat them unless they ask.`
+        )}. Do not repeat those exact steps unless they ask.`
       : "The user has not confirmed completing any steps yet.";
 
   return `You are a helpful IT assistant. Use ONLY the following issue data. Do not use other knowledge.
@@ -58,14 +65,23 @@ Safety and format rules:
 - Never ask for passwords, tokens, or other sensitive information.
 - Never instruct risky actions: driver reinstalls, network setting changes, firmware updates, or admin-level commands. Say "Escalate to IT" and what info to provide instead.
 - Use only the provided steps and issue data. Keep responses short, numbered, and practical.
+- Always format the \"answer\" as a numbered list (\"1.\", \"2.\", ...). Keep it to about 6 short lines or fewer.
+- Do not paste any step's instruction text verbatim. Instead, refer to the step by title and paraphrase or ask about the outcome.
 - If you are unsure or the user has exhausted the steps, recommend escalation and list what info to provide (from the escalation list above).
 
-Structured output (required): Reply with ONLY a valid JSON object. No markdown, no code fence, no other text. The object must have exactly these keys:
-- "answer": string — your short, helpful answer (numbered steps when giving instructions).
-- "recommendation": one of "next_step" (user should advance), "repeat_step" (try current step again or clarify), "escalate" (user should escalate to IT).
-- "shouldEscalate": boolean — true if the user should contact IT, false otherwise.
+Vague or unclear user messages:
+- If the user message is vague (for example: \"still not working\", \"didn't fix it\", \"same issue\", \"no change\", \"nothing happened\"), do NOT just repeat the current step.
+- For vague messages, the \"answer\" should be 1–2 short clarification questions (numbered) and still include a recommendation in the same JSON response.
+  - If the user appears to have completed the current step, or the current step title is listed in the attempted steps above, prefer \"next_step\".
+  - If you reasonably believe all steps have been tried or the current step is effectively the last option, use \"escalate\" and set \"shouldEscalate\" to true.
+  - Only use \"repeat_step\" when the user seems confused about HOW to do the current step and has not clearly completed it yet.
 
-Example: {"answer":"1. Check the power cable. 2. Restart the printer.","recommendation":"next_step","shouldEscalate":false}`;
+Structured output (required): Reply with ONLY a valid JSON object. No markdown, no code fence, no other text. The object must have exactly these keys:
+- \"answer\": string — your short, helpful answer (numbered steps when giving instructions).
+- \"recommendation\": one of \"next_step\" (user should advance), \"repeat_step\" (try current step again or clarify), \"escalate\" (user should escalate to IT).
+- \"shouldEscalate\": boolean — true if the user should contact IT, false otherwise.
+
+Example: {\"answer\":\"1. Check the power cable. 2. Restart the printer.\",\"recommendation\":\"next_step\",\"shouldEscalate\":false}`;
 }
 
 export async function POST(request: Request) {
@@ -82,7 +98,6 @@ export async function POST(request: Request) {
     question?: string;
     currentStepIndex?: number;
     currentStepTitle?: string;
-    attemptedStepIds?: string[];
     attemptedStepTitles?: string[];
   };
   try {
@@ -99,7 +114,6 @@ export async function POST(request: Request) {
     question,
     currentStepIndex,
     currentStepTitle,
-    attemptedStepIds,
     attemptedStepTitles,
   } = body;
   if (typeof slug !== "string" || !slug.trim()) {
@@ -150,6 +164,7 @@ export async function POST(request: Request) {
         { role: "user", content: question.trim() },
       ],
       max_tokens: 500,
+      temperature: 0.2,
     });
 
     const raw =
@@ -160,28 +175,33 @@ export async function POST(request: Request) {
     let recommendation: "next_step" | "repeat_step" | "escalate" = "repeat_step";
     let shouldEscalate = false;
 
-    try {
-      const parsed = JSON.parse(raw) as {
-        answer?: string;
-        recommendation?: string;
-        shouldEscalate?: boolean;
-      };
-      if (typeof parsed.answer === "string" && parsed.answer.trim()) {
-        answer = parsed.answer.trim();
+    // Defensive size guard before parsing JSON
+    if (!raw || raw.length > 8000) {
+      answer = "1. Assistant response was too long or empty. 2. Try the next step or escalate.";
+      recommendation = "next_step";
+      shouldEscalate = false;
+    } else {
+      try {
+        const parsed = JSON.parse(raw) as ModelJson;
+        if (typeof parsed.answer === "string" && parsed.answer.trim()) {
+          answer = parsed.answer.trim();
+        }
+        if (
+          parsed.recommendation === "next_step" ||
+          parsed.recommendation === "repeat_step" ||
+          parsed.recommendation === "escalate"
+        ) {
+          recommendation = parsed.recommendation;
+        }
+        if (typeof parsed.shouldEscalate === "boolean") {
+          shouldEscalate = parsed.shouldEscalate;
+        }
+      } catch {
+        // JSON parse failure fallback
+        answer = "1. Assistant response was too long or empty. 2. Try the next step or escalate.";
+        recommendation = "next_step";
+        shouldEscalate = false;
       }
-      if (
-        parsed.recommendation === "next_step" ||
-        parsed.recommendation === "repeat_step" ||
-        parsed.recommendation === "escalate"
-      ) {
-        recommendation = parsed.recommendation;
-      }
-      if (typeof parsed.shouldEscalate === "boolean") {
-        shouldEscalate = parsed.shouldEscalate;
-      }
-    } catch {
-      // If JSON parse fails, still return a valid shape; answer might be in raw
-      if (raw.length > 0) answer = raw.slice(0, 1200);
     }
 
     return NextResponse.json({
